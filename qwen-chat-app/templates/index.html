@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAG Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #171923;
+      --surface2:  #1e2130;
+      --border:    #2a2f42;
+      --accent:    #4f8ef7;
+      --accent2:   #7c5cfc;
+      --text:      #e8eaf0;
+      --muted:     #6b7280;
+      --success:   #34d399;
+      --warning:   #fbbf24;
+      --error:     #f87171;
+      --radius:    12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: stretch;
+    }
+
+    /* ── Layout ── */
+    .app {
+      width: 100%;
+      max-width: 820px;
+      display: flex;
+      flex-direction: column;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+
+    /* ── Header ── */
+    header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .logo-text {
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.3px;
+    }
+    .logo-sub {
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      letter-spacing: 0.5px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .doc-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .doc-pill:hover { border-color: var(--accent); color: var(--text); }
+    .doc-pill .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.2s;
+    }
+    .doc-pill.has-docs .dot { background: var(--success); }
+    .doc-pill.has-docs { color: var(--text); }
+
+    .btn-icon {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      width: 32px; height: 32px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      transition: all 0.15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Upload Drawer ── */
+    .upload-drawer {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.25s ease, padding 0.25s ease;
+      flex-shrink: 0;
+    }
+    .upload-drawer.open {
+      max-height: 160px;
+    }
+    .upload-inner {
+      padding: 16px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .upload-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .upload-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .upload-label:hover { opacity: 0.88; }
+    .upload-label input { display: none; }
+    .upload-hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .upload-feedback {
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      color: var(--muted);
+      min-height: 16px;
+    }
+    .upload-feedback.ok    { color: var(--success); }
+    .upload-feedback.fail  { color: var(--error); }
+    .upload-feedback.busy  { color: var(--warning); }
+
+    /* ── Messages ── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      scroll-behavior: smooth;
+    }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    /* ── Message bubbles ── */
+    .msg {
+      display: flex;
+      gap: 12px;
+      animation: fadeUp 0.22s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg.user { flex-direction: row-reverse; }
+
+    .avatar {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      margin-top: 2px;
+    }
+    .msg.ai   .avatar { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+    .msg.user .avatar { background: var(--surface2); border: 1px solid var(--border); }
+
+    .bubble {
+      max-width: 72%;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+    .msg.ai   .bubble {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top-left-radius: 4px;
+    }
+    .msg.user .bubble {
+      background: var(--accent);
+      color: white;
+      border-top-right-radius: 4px;
+    }
+
+    /* Markdown inside AI bubble */
+    .bubble strong { font-weight: 600; }
+    .bubble em     { color: var(--muted); font-style: normal; }
+    .bubble code {
+      font-family: 'IBM Plex Mono', monospace;
+      background: var(--surface2);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .bubble ul, .bubble ol { margin: 8px 0 8px 18px; }
+    .bubble li { margin: 3px 0; }
+    .bubble p  { margin: 6px 0; }
+    .bubble h3 { font-size: 14px; font-weight: 600; margin: 10px 0 4px; }
+
+    /* Source tags */
+    .sources {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .source-tag {
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+    .source-tag::before { content: "📄 "; }
+
+    /* Thinking indicator */
+    .thinking {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 4px;
+    }
+    .thinking-avatar {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .dots {
+      display: flex; gap: 5px; align-items: center;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      border-top-left-radius: 4px;
+    }
+    .dots span {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: blink 1.2s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      40%           { opacity: 1;   transform: scale(1); }
+    }
+
+    /* ── Input ── */
+    .input-area {
+      padding: 16px 24px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-shrink: 0;
+    }
+    textarea {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 14px;
+      padding: 11px 14px;
+      resize: none;
+      outline: none;
+      line-height: 1.5;
+      max-height: 120px;
+      transition: border-color 0.15s;
+    }
+    textarea::placeholder { color: var(--muted); }
+    textarea:focus { border-color: var(--accent); }
+    textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .send-btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      color: white;
+      width: 40px; height: 40px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .send-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* Send icon */
+    .send-btn svg { width: 18px; height: 18px; fill: white; }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Welcome ── */
+    .welcome {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--muted);
+    }
+    .welcome strong { color: var(--text); font-size: 15px; display: block; margin-bottom: 8px; }
+    .welcome code {
+      font-family: 'IBM Plex Mono', monospace;
+      background: var(--surface2);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--accent);
+    }
+    .welcome ul { margin: 10px 0 0 16px; }
+    .welcome li { margin: 4px 0; }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .bubble { max-width: 88%; }
+      header  { padding: 12px 16px; }
+      .messages, .input-area { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- Header -->
+    <header>
+      <div class="logo">
+        <div class="logo-icon">⬡</div>
+        <div>
+          <div class="logo-text">RAG Assistant</div>
+          <div class="logo-sub">qwen2.5 · nomic-embed-text</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="doc-pill" id="docPill" onclick="toggleDrawer()" title="Upload documents">
+          <span class="dot" id="docDot"></span>
+          <span id="docPillText">No docs</span>
+        </div>
+        <button class="btn-icon" onclick="clearChat()" title="Clear conversation">✕</button>
+      </div>
+    </header>
+
+    <!-- Upload Drawer -->
+    <div class="upload-drawer" id="uploadDrawer">
+      <div class="upload-inner">
+        <div class="upload-row">
+          <label class="upload-label">
+            ↑ Upload document
+            <input type="file" id="fileInput" accept=".docx,.txt,.md" multiple>
+          </label>
+          <span class="upload-hint">.docx · .txt · .md &nbsp;·&nbsp; up to 10 MB each</span>
+        </div>
+        <div class="upload-feedback" id="uploadFeedback">Ready to index your documents.</div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages" id="messages">
+      <div class="welcome">
+        <strong>👋 Welcome — ask anything about your documents.</strong>
+        Upload a <code>.docx</code> or <code>.txt</code> file using the pill above, then ask questions. I'll search the document and answer from it.<br><br>
+        Without documents I'll answer from general knowledge.
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-area">
+      <textarea
+        id="input"
+        placeholder="Ask a question..."
+        rows="1"
+        autofocus
+      ></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    // ── State ──
+    const state = {
+      sessionId:  'sess_' + Math.random().toString(36).slice(2, 10),
+      docsLoaded: 0,
+      busy:       false,
+    };
+
+    // ── DOM refs ──
+    const $messages     = document.getElementById('messages');
+    const $input        = document.getElementById('input');
+    const $sendBtn      = document.getElementById('sendBtn');
+    const $fileInput    = document.getElementById('fileInput');
+    const $uploadDrawer = document.getElementById('uploadDrawer');
+    const $uploadFb     = document.getElementById('uploadFeedback');
+    const $docPill      = document.getElementById('docPill');
+    const $docPillText  = document.getElementById('docPillText');
+
+    // ── Drawer ──
+    function toggleDrawer() {
+      $uploadDrawer.classList.toggle('open');
+    }
+
+    // ── Pill label ──
+    function updatePill() {
+      const n = state.docsLoaded;
+      $docPillText.textContent = n === 0 ? 'No docs' : `${n} doc${n > 1 ? 's' : ''} loaded`;
+      $docPill.classList.toggle('has-docs', n > 0);
+    }
+
+    // ── Auto-resize textarea ──
+    $input.addEventListener('input', () => {
+      $input.style.height = 'auto';
+      $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+    });
+
+    $input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // ── Append message ──
+    function appendMsg(html, role, sources = []) {
+      const wrap = document.createElement('div');
+      wrap.className = `msg ${role}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.textContent = role === 'ai' ? '⬡' : '↑';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = html;
+
+      if (sources.length > 0) {
+        const src = document.createElement('div');
+        src.className = 'sources';
+        sources.forEach(s => {
+          const tag = document.createElement('span');
+          tag.className = 'source-tag';
+          tag.textContent = s;
+          src.appendChild(tag);
+        });
+        bubble.appendChild(src);
+      }
+
+      wrap.appendChild(avatar);
+      wrap.appendChild(bubble);
+      $messages.appendChild(wrap);
+      scrollBottom();
+      return wrap;
+    }
+
+    // ── Thinking indicator ──
+    function showThinking() {
+      const wrap = document.createElement('div');
+      wrap.className = 'thinking';
+      wrap.id = 'thinking';
+      wrap.innerHTML = `
+        <div class="thinking-avatar">⬡</div>
+        <div class="dots"><span></span><span></span><span></span></div>
+      `;
+      $messages.appendChild(wrap);
+      scrollBottom();
+    }
+    function hideThinking() {
+      document.getElementById('thinking')?.remove();
+    }
+
+    // ── Simple markdown renderer ──
+    function md(text) {
+      return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+        .replace(/`([^`]+)`/g,     '<code>$1</code>')
+        .replace(/^#{3}\s+(.+)$/gm,'<h3>$1</h3>')
+        .replace(/^#{1,2}\s+(.+)$/gm,'<strong>$1</strong>')
+        .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+        .replace(/\n{2,}/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+    }
+
+    function scrollBottom() {
+      $messages.scrollTop = $messages.scrollHeight;
+    }
+
+    function setLoading(on) {
+      state.busy = on;
+      $input.disabled = on;
+      $sendBtn.disabled = on;
+      $sendBtn.innerHTML = on
+        ? '<div class="spinner"></div>'
+        : '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+    }
+
+    // ── Send message ──
+    async function sendMessage() {
+      const text = $input.value.trim();
+      if (!text || state.busy) return;
+
+      appendMsg(text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'), 'user');
+      $input.value = '';
+      $input.style.height = 'auto';
+      setLoading(true);
+      showThinking();
+
+      try {
+        const fd = new FormData();
+        fd.append('message',    text);
+        fd.append('session_id', state.sessionId);
+
+        const res  = await fetch('/chat', { method: 'POST', body: fd });
+        const data = await res.json();
+        hideThinking();
+
+        if (!res.ok) throw new Error(data.detail || 'Request failed');
+        appendMsg(`<p>${md(data.response)}</p>`, 'ai', data.sources || []);
+      } catch (err) {
+        hideThinking();
+        appendMsg(`<p>⚠️ ${err.message}</p>`, 'ai');
+      } finally {
+        setLoading(false);
+        $input.focus();
+      }
+    }
+
+    // ── File upload ──
+    $fileInput.addEventListener('change', async e => {
+      const files = [...e.target.files];
+      if (!files.length) return;
+
+      const valid = ['.docx', '.txt', '.md'];
+      for (const file of files) {
+        const ext = '.' + file.name.split('.').pop().toLowerCase();
+        if (!valid.includes(ext)) {
+          setFeedback(`⚠️ Skipped "${file.name}" — unsupported type`, 'fail');
+          continue;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          setFeedback(`⚠️ Skipped "${file.name}" — exceeds 10 MB`, 'fail');
+          continue;
+        }
+
+        setFeedback(`⏳ Indexing ${file.name}…`, 'busy');
+        setLoading(true);
+
+        const fd = new FormData();
+        fd.append('file', file);
+
+        try {
+          const res  = await fetch('/upload', { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+          state.docsLoaded++;
+          updatePill();
+          setFeedback(`✓ "${file.name}" — ${data.chunks_added} chunks indexed`, 'ok');
+          appendMsg(`<p>📄 <strong>${file.name}</strong> added to the knowledge base (${data.chunks_added} chunks). Ask me anything about it.</p>`, 'ai');
+        } catch (err) {
+          setFeedback(`✕ ${file.name}: ${err.message}`, 'fail');
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      $fileInput.value = '';
+      $input.focus();
+    });
+
+    function setFeedback(msg, type) {
+      $uploadFb.textContent = msg;
+      $uploadFb.className   = `upload-feedback ${type}`;
+    }
+
+    // ── Clear chat ──
+    async function clearChat() {
+      if (!confirm('Clear this conversation? Documents stay indexed.')) return;
+      try {
+        const fd = new FormData();
+        fd.append('session_id', state.sessionId);
+        await fetch('/clear', { method: 'POST', body: fd });
+      } catch (_) {}
+      $messages.innerHTML = `
+        <div class="welcome">
+          <strong>Conversation cleared.</strong>
+          Your documents are still indexed — keep asking questions.
+        </div>`;
+    }
+  </script>
+</body>
+</html>
