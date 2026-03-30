@@ -3,660 +3,908 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RAG Assistant</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <title>Orion</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --bg:        #0f1117;
-      --surface:   #171923;
-      --surface2:  #1e2130;
-      --border:    #2a2f42;
-      --accent:    #4f8ef7;
-      --accent2:   #7c5cfc;
-      --text:      #e8eaf0;
-      --muted:     #6b7280;
-      --success:   #34d399;
-      --warning:   #fbbf24;
-      --error:     #f87171;
-      --radius:    12px;
-      --radius-sm: 8px;
+      --bg:      #09090b;
+      --surface: #111113;
+      --card:    #18181b;
+      --border:  #27272a;
+      --accent:  #818cf8;
+      --text:    #f4f4f5;
+      --sub:     #a1a1aa;
+      --muted:   #52525b;
+      --success: #4ade80;
+      --error:   #f87171;
+      --r:       10px;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
 
     body {
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: stretch;
+      font-size: 14px;
+      line-height: 1.6;
     }
 
-    /* ── Layout ── */
-    .app {
-      width: 100%;
-      max-width: 820px;
+    .layout {
+      height: 100vh;
+      max-width: 740px;
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      border-left: 1px solid var(--border);
-      border-right: 1px solid var(--border);
     }
 
     /* ── Header ── */
-    header {
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--border);
+    .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: var(--surface);
+      padding: 0 20px;
+      height: 52px;
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .logo {
+
+    .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-    }
-    .logo-icon {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-    }
-    .logo-text {
+      gap: 8px;
       font-weight: 600;
       font-size: 15px;
-      letter-spacing: -0.3px;
+      letter-spacing: -0.2px;
     }
-    .logo-sub {
-      font-size: 11px;
-      color: var(--muted);
-      font-family: 'IBM Plex Mono', monospace;
-      letter-spacing: 0.5px;
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
     }
+
     .header-right {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
-    .doc-pill {
+
+    .doc-badge {
       display: flex;
       align-items: center;
-      gap: 6px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
+      gap: 5px;
+      padding: 3px 10px;
       border-radius: 20px;
-      padding: 5px 12px;
+      border: 1px solid var(--border);
       font-size: 12px;
-      color: var(--muted);
-      font-family: 'IBM Plex Mono', monospace;
-      cursor: pointer;
-      transition: all 0.15s;
+      color: var(--sub);
+      background: var(--card);
+      user-select: none;
     }
-    .doc-pill:hover { border-color: var(--accent); color: var(--text); }
-    .doc-pill .dot {
-      width: 7px; height: 7px;
+
+    .doc-badge .dot {
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: var(--muted);
-      transition: background 0.2s;
-    }
-    .doc-pill.has-docs .dot { background: var(--success); }
-    .doc-pill.has-docs { color: var(--text); }
-
-    .btn-icon {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      width: 32px; height: 32px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 14px;
-      transition: all 0.15s;
-    }
-    .btn-icon:hover { border-color: var(--accent); color: var(--text); }
-
-    /* ── Upload Drawer ── */
-    .upload-drawer {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      overflow: hidden;
-      max-height: 0;
-      transition: max-height 0.25s ease, padding 0.25s ease;
       flex-shrink: 0;
+      transition: background .2s;
     }
-    .upload-drawer.open {
-      max-height: 160px;
-    }
-    .upload-inner {
-      padding: 16px 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .upload-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .upload-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      color: white;
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      font-weight: 500;
+
+    .doc-badge.has-docs .dot { background: var(--success); }
+    .doc-badge.has-docs      { color: var(--text); }
+
+    .btn-ghost {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--sub);
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
       cursor: pointer;
-      transition: opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      transition: color .15s, border-color .15s;
     }
-    .upload-label:hover { opacity: 0.88; }
-    .upload-label input { display: none; }
-    .upload-hint {
-      font-size: 12px;
-      color: var(--muted);
-    }
-    .upload-feedback {
-      font-size: 12px;
-      font-family: 'IBM Plex Mono', monospace;
-      color: var(--muted);
-      min-height: 16px;
-    }
-    .upload-feedback.ok    { color: var(--success); }
-    .upload-feedback.fail  { color: var(--error); }
-    .upload-feedback.busy  { color: var(--warning); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--sub); }
 
     /* ── Messages ── */
     .messages {
       flex: 1;
       overflow-y: auto;
-      padding: 24px;
+      padding: 28px 20px;
       display: flex;
       flex-direction: column;
       gap: 16px;
       scroll-behavior: smooth;
     }
-    .messages::-webkit-scrollbar { width: 4px; }
-    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar       { width: 4px; }
     .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
-    /* ── Message bubbles ── */
     .msg {
       display: flex;
-      gap: 12px;
-      animation: fadeUp 0.22s ease;
+      flex-direction: column;
+      animation: fadeUp .2s ease;
     }
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(10px); }
-      to   { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: none; }
     }
-    .msg.user { flex-direction: row-reverse; }
 
-    .avatar {
-      width: 28px; height: 28px;
-      border-radius: 8px;
-      flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px;
-      margin-top: 2px;
-    }
-    .msg.ai   .avatar { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
-    .msg.user .avatar { background: var(--surface2); border: 1px solid var(--border); }
+    .msg.user { align-items: flex-end; }
+    .msg.ai   { align-items: flex-start; }
 
     .bubble {
-      max-width: 72%;
-      padding: 12px 16px;
-      border-radius: var(--radius);
+      max-width: 82%;
+      padding: 10px 14px;
+      border-radius: var(--r);
       font-size: 14px;
       line-height: 1.65;
     }
-    .msg.ai   .bubble {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-top-left-radius: 4px;
-    }
+
     .msg.user .bubble {
       background: var(--accent);
-      color: white;
-      border-top-right-radius: 4px;
+      color: #fff;
+      border-bottom-right-radius: 3px;
     }
 
-    /* Markdown inside AI bubble */
+    .msg.ai .bubble {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 3px;
+    }
+
+    /* Markdown inside bubbles */
     .bubble strong { font-weight: 600; }
-    .bubble em     { color: var(--muted); font-style: normal; }
-    .bubble code {
-      font-family: 'IBM Plex Mono', monospace;
-      background: var(--surface2);
-      padding: 2px 6px;
+    .bubble em     { font-style: italic; }
+    .bubble code   {
+      font-family: 'SF Mono', ui-monospace, 'Fira Code', monospace;
+      background: rgba(255,255,255,.07);
+      padding: 1px 5px;
       border-radius: 4px;
-      font-size: 12px;
+      font-size: 12.5px;
     }
-    .bubble ul, .bubble ol { margin: 8px 0 8px 18px; }
-    .bubble li { margin: 3px 0; }
-    .bubble p  { margin: 6px 0; }
-    .bubble h3 { font-size: 14px; font-weight: 600; margin: 10px 0 4px; }
+    .bubble ul, .bubble ol { margin: 6px 0 6px 18px; }
+    .bubble li   { margin: 2px 0; }
+    .bubble p    { margin: 4px 0; }
+    .bubble h3   { font-size: 14px; font-weight: 600; margin: 8px 0 4px; }
+    .bubble p:first-child { margin-top: 0; }
+    .bubble p:last-child  { margin-bottom: 0; }
 
-    /* Source tags */
+    /* Sources */
     .sources {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 10px;
-      padding-top: 10px;
+      gap: 4px;
+      margin-top: 8px;
+      padding-top: 8px;
       border-top: 1px solid var(--border);
     }
-    .source-tag {
+    .src-chip {
       font-size: 11px;
-      font-family: 'IBM Plex Mono', monospace;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--muted);
+      background: rgba(129,140,248,.08);
+      border: 1px solid rgba(129,140,248,.18);
+      color: var(--sub);
       padding: 2px 8px;
       border-radius: 4px;
     }
-    .source-tag::before { content: "📄 "; }
+
+    /* Speak button */
+    .speak-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 8px;
+      padding: 3px 8px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .speak-btn:hover   { color: var(--sub); border-color: var(--sub); }
+    .speak-btn.playing { border-color: var(--accent); color: var(--accent); }
+    .speak-btn.loading { opacity: .5; cursor: not-allowed; }
+
+    .wave { display: inline-flex; gap: 2px; align-items: center; height: 10px; }
+    .wave span {
+      display: inline-block;
+      width: 2px;
+      background: currentColor;
+      border-radius: 2px;
+      animation: wb .8s ease-in-out infinite;
+    }
+    .wave span:nth-child(1){height:3px;  animation-delay:0s}
+    .wave span:nth-child(2){height:8px;  animation-delay:.1s}
+    .wave span:nth-child(3){height:10px; animation-delay:.2s}
+    .wave span:nth-child(4){height:8px;  animation-delay:.3s}
+    .wave span:nth-child(5){height:3px;  animation-delay:.4s}
+    @keyframes wb { 0%,100%{transform:scaleY(.4)} 50%{transform:scaleY(1)} }
 
     /* Thinking indicator */
-    .thinking {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 0 4px;
-    }
-    .thinking-avatar {
-      width: 28px; height: 28px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px;
-      flex-shrink: 0;
-    }
-    .dots {
-      display: flex; gap: 5px; align-items: center;
-      padding: 12px 16px;
-      background: var(--surface);
+    .thinking-row { display: flex; align-items: flex-start; }
+    .thinking-bubble {
+      background: var(--card);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      border-top-left-radius: 4px;
+      padding: 10px 14px;
+      border-radius: var(--r);
+      border-bottom-left-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 82%;
     }
-    .dots span {
-      width: 6px; height: 6px;
+    .thinking-dots {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .thinking-dots span {
+      width: 5px; height: 5px;
       border-radius: 50%;
       background: var(--muted);
-      animation: blink 1.2s infinite;
+      animation: db 1.2s infinite;
     }
-    .dots span:nth-child(2) { animation-delay: 0.2s; }
-    .dots span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes blink {
-      0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-      40%           { opacity: 1;   transform: scale(1); }
+    .thinking-dots span:nth-child(2){animation-delay:.2s}
+    .thinking-dots span:nth-child(3){animation-delay:.4s}
+    @keyframes db { 0%,80%,100%{opacity:.3;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
+    .thinking-text {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+      max-width: 100%;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      display: none;
+    }
+    .thinking-text.visible { display: block; }
+
+    /* Welcome card */
+    .welcome {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 20px;
+      color: var(--sub);
+      font-size: 13px;
+      line-height: 1.75;
+    }
+    .welcome strong {
+      color: var(--text);
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+    .welcome code {
+      font-family: ui-monospace, monospace;
+      background: rgba(129,140,248,.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      color: var(--accent);
+      font-size: 12px;
     }
 
-    /* ── Input ── */
-    .input-area {
-      padding: 16px 24px;
-      background: var(--surface);
+    /* Upload status strip */
+    .upload-strip {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height .2s ease;
+      border-top: 1px solid transparent;
+    }
+    .upload-strip.visible {
+      max-height: 36px;
+      border-top-color: var(--border);
+    }
+    .upload-strip-inner {
+      padding: 7px 20px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .upload-strip.ok   .upload-strip-inner { color: var(--success); }
+    .upload-strip.fail .upload-strip-inner { color: var(--error); }
+    .upload-strip.busy .upload-strip-inner { color: var(--sub); }
+
+    /* Input bar */
+    .input-bar {
+      padding: 12px 16px;
       border-top: 1px solid var(--border);
       display: flex;
-      gap: 10px;
       align-items: flex-end;
+      gap: 8px;
       flex-shrink: 0;
     }
-    textarea {
-      flex: 1;
-      background: var(--surface2);
+
+    .upload-label {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
       border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      background: var(--card);
+      color: var(--sub);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      transition: all .15s;
+      line-height: 1;
+    }
+    .upload-label:hover { border-color: var(--sub); color: var(--text); }
+    .upload-label input { display: none; }
+
+    .textarea-wrap { flex: 1; }
+
+    textarea {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
       color: var(--text);
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: inherit;
       font-size: 14px;
-      padding: 11px 14px;
+      line-height: 1.5;
+      padding: 9px 12px;
       resize: none;
       outline: none;
-      line-height: 1.5;
       max-height: 120px;
-      transition: border-color 0.15s;
+      transition: border-color .15s;
+      display: block;
     }
+    textarea:focus        { border-color: var(--accent); }
     textarea::placeholder { color: var(--muted); }
-    textarea:focus { border-color: var(--accent); }
-    textarea:disabled { opacity: 0.5; cursor: not-allowed; }
+    textarea:disabled     { opacity: .5; cursor: not-allowed; }
+
+    .voice-toggle {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--sub);
+      font-size: 12px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      transition: all .15s;
+      white-space: nowrap;
+    }
+    .voice-toggle:hover               { border-color: var(--sub); color: var(--text); }
+    .voice-toggle.on                  { background: rgba(129,140,248,.12); border-color: var(--accent); color: var(--accent); }
+    .voice-toggle.unavailable         { opacity: .3; cursor: not-allowed; }
+    .voice-toggle .vdot               { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); transition: background .15s; flex-shrink: 0; }
+    .voice-toggle.on .vdot            { background: var(--accent); }
 
     .send-btn {
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--accent);
       border: none;
-      color: white;
-      width: 40px; height: 40px;
-      border-radius: var(--radius-sm);
+      color: #fff;
       cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
-      transition: opacity 0.15s, transform 0.1s;
+      transition: opacity .15s;
     }
-    .send-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
-    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .send-btn:hover:not(:disabled) { opacity: .85; }
+    .send-btn:disabled             { opacity: .35; cursor: not-allowed; }
+    .send-btn svg                  { width: 16px; height: 16px; fill: white; }
 
-    /* Send icon */
-    .send-btn svg { width: 18px; height: 18px; fill: white; }
-
-    /* Spinner */
     .spinner {
-      width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,0.4);
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.25);
       border-top-color: white;
       border-radius: 50%;
-      animation: spin 0.7s linear infinite;
+      animation: spin .7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Welcome ── */
-    .welcome {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-      font-size: 13px;
-      line-height: 1.7;
-      color: var(--muted);
-    }
-    .welcome strong { color: var(--text); font-size: 15px; display: block; margin-bottom: 8px; }
-    .welcome code {
-      font-family: 'IBM Plex Mono', monospace;
-      background: var(--surface2);
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 12px;
-      color: var(--accent);
-    }
-    .welcome ul { margin: 10px 0 0 16px; }
-    .welcome li { margin: 4px 0; }
-
-    /* Responsive */
-    @media (max-width: 600px) {
-      .bubble { max-width: 88%; }
-      header  { padding: 12px 16px; }
-      .messages, .input-area { padding: 16px; }
-    }
   </style>
 </head>
 <body>
-  <div class="app">
+<div class="layout">
 
-    <!-- Header -->
-    <header>
-      <div class="logo">
-        <div class="logo-icon">⬡</div>
-        <div>
-          <div class="logo-text">RAG Assistant</div>
-          <div class="logo-sub">qwen2.5 · nomic-embed-text</div>
-        </div>
-      </div>
-      <div class="header-right">
-        <div class="doc-pill" id="docPill" onclick="toggleDrawer()" title="Upload documents">
-          <span class="dot" id="docDot"></span>
-          <span id="docPillText">No docs</span>
-        </div>
-        <button class="btn-icon" onclick="clearChat()" title="Clear conversation">✕</button>
-      </div>
-    </header>
-
-    <!-- Upload Drawer -->
-    <div class="upload-drawer" id="uploadDrawer">
-      <div class="upload-inner">
-        <div class="upload-row">
-          <label class="upload-label">
-            ↑ Upload document
-            <input type="file" id="fileInput" accept=".docx,.txt,.md" multiple>
-          </label>
-          <span class="upload-hint">.docx · .txt · .md &nbsp;·&nbsp; up to 10 MB each</span>
-        </div>
-        <div class="upload-feedback" id="uploadFeedback">Ready to index your documents.</div>
-      </div>
+  <header class="header">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      Orion
     </div>
-
-    <!-- Messages -->
-    <div class="messages" id="messages">
-      <div class="welcome">
-        <strong>👋 Welcome — ask anything about your documents.</strong>
-        Upload a <code>.docx</code> or <code>.txt</code> file using the pill above, then ask questions. I'll search the document and answer from it.<br><br>
-        Without documents I'll answer from general knowledge.
+    <div class="header-right">
+      <div class="doc-badge" id="docBadge">
+        <span class="dot"></span>
+        <span id="docBadgeText">No docs</span>
       </div>
+      <button class="btn-ghost" onclick="clearChat()" title="Clear conversation">✕</button>
     </div>
+  </header>
 
-    <!-- Input -->
-    <div class="input-area">
-      <textarea
-        id="input"
-        placeholder="Ask a question..."
-        rows="1"
-        autofocus
-      ></textarea>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-      </button>
+  <div class="messages" id="messages">
+    <div class="welcome">
+      <strong>Ask anything about your documents.</strong>
+      Click <code>+</code> to upload a <code>.docx</code> or <code>.txt</code> file, then start asking questions.
+      Toggle <code>Voice</code> to hear responses read aloud.
     </div>
-
   </div>
 
-  <script>
-    // ── State ──
-    const state = {
-      sessionId:  'sess_' + Math.random().toString(36).slice(2, 10),
-      docsLoaded: 0,
-      busy:       false,
+  <div class="upload-strip" id="uploadStrip">
+    <div class="upload-strip-inner" id="uploadMsg"></div>
+  </div>
+
+  <div class="input-bar">
+    <label class="upload-label" title="Upload document">
+      +
+      <input type="file" id="fileInput" accept=".docx,.txt,.md" multiple>
+    </label>
+
+    <div class="textarea-wrap">
+      <textarea id="input" placeholder="Ask a question…" rows="1" autofocus></textarea>
+    </div>
+
+    <button class="voice-toggle" id="voiceBtn" onclick="toggleTTS()" title="Toggle voice output">
+      <span class="vdot"></span>
+      <span id="voiceBtnText">Voice</span>
+    </button>
+
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+
+</div>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const state = {
+  sessionId:       'sess_' + Math.random().toString(36).slice(2, 10),
+  docsLoaded:      0,
+  busy:            false,
+  ttsEnabled:      true,
+  ttsAvailable:    false,
+  kokoroAvailable: false,
+  currentAudio:    null,
+  currentBtn:      null,
+};
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const $messages    = document.getElementById('messages');
+const $input       = document.getElementById('input');
+const $sendBtn     = document.getElementById('sendBtn');
+const $fileInput   = document.getElementById('fileInput');
+const $docBadge    = document.getElementById('docBadge');
+const $docBadgeTxt = document.getElementById('docBadgeText');
+const $voiceBtn     = document.getElementById('voiceBtn');
+const $voiceBtnText = document.getElementById('voiceBtnText');
+const $uploadStrip = document.getElementById('uploadStrip');
+const $uploadMsg   = document.getElementById('uploadMsg');
+
+// ── Init TTS ───────────────────────────────────────────────────────────────
+const _browserTTS = ('speechSynthesis' in window);
+
+(async () => {
+  try {
+    const r = await fetch('/tts_status');
+    const d = await r.json();
+    state.kokoroAvailable = d.available;
+  } catch (_) {}
+  state.ttsAvailable = state.kokoroAvailable || _browserTTS;
+  if (!state.ttsAvailable) {
+    state.ttsEnabled = false;
+    $voiceBtn.classList.add('unavailable');
+    $voiceBtn.title = 'No TTS engine available';
+    $voiceBtnText.textContent = 'Voice N/A';
+  } else {
+    $voiceBtn.classList.add('on');
+    $voiceBtnText.textContent = 'Voice on';
+  }
+})();
+
+// ── TTS toggle ─────────────────────────────────────────────────────────────
+function toggleTTS() {
+  if (!state.ttsAvailable) return;
+  state.ttsEnabled = !state.ttsEnabled;
+  $voiceBtn.classList.toggle('on', state.ttsEnabled);
+  $voiceBtnText.textContent = state.ttsEnabled ? 'Voice on' : 'Voice';
+  if (!state.ttsEnabled) stopAudio();
+}
+
+function stopAudio() {
+  if (state.currentAudio) { state.currentAudio.pause(); state.currentAudio = null; }
+  if (_browserTTS) window.speechSynthesis.cancel();
+  if (state.currentBtn) {
+    state.currentBtn.classList.remove('playing');
+    state.currentBtn.innerHTML = speakBtnHTML('idle');
+    state.currentBtn = null;
+  }
+  _streamTTSReset();
+}
+
+// ── Streaming TTS queue ────────────────────────────────────────────────────
+// Sentences are fetched in parallel but played in order.
+let _sentBuf   = '';          // token accumulation
+let _ttsQueue  = [];          // [{ blobPromise }]
+let _ttsPlaying = false;
+
+function _streamTTSReset() {
+  _sentBuf = '';
+  _ttsQueue = [];
+  _ttsPlaying = false;
+}
+
+// Feed a streamed token — emits complete sentences to the queue
+function feedStreamTTS(token) {
+  if (!state.ttsEnabled || !state.ttsAvailable) return;
+  _sentBuf += token;
+  // Sentence boundary: .!? followed by a space (not mid-word)
+  let idx;
+  while ((idx = _sentBuf.search(/[.!?]\s/)) !== -1) {
+    const sentence = _sentBuf.slice(0, idx + 1).trim();
+    _sentBuf = _sentBuf.slice(idx + 2);
+    if (sentence.replace(/\s/g, '').length >= 6) _enqueueSentence(sentence);
+  }
+}
+
+// Flush any remaining buffer at end of stream
+function flushStreamTTS() {
+  const rem = _sentBuf.trim();
+  if (rem.length >= 3) _enqueueSentence(rem);
+  _sentBuf = '';
+}
+
+function _enqueueSentence(text) {
+  // Start fetching audio immediately (parallel prefetch), play in order
+  const blobPromise = state.kokoroAvailable ? _fetchKokoroBlob(text) : Promise.resolve(null);
+  _ttsQueue.push({ text, blobPromise });
+  _drainQueue();
+}
+
+async function _drainQueue() {
+  if (_ttsPlaying || _ttsQueue.length === 0) return;
+  _ttsPlaying = true;
+  const item = _ttsQueue.shift();
+  try {
+    if (state.kokoroAvailable) {
+      const blob = await item.blobPromise;
+      if (blob) { await _playBlob(blob); }
+      else       { await _playBrowserSentence(item.text); }
+    } else {
+      await _playBrowserSentence(item.text);
+    }
+  } catch (_) {}
+  _ttsPlaying = false;
+  _drainQueue();
+}
+
+async function _fetchKokoroBlob(text) {
+  try {
+    const fd = new FormData();
+    fd.append('text', text);
+    const res = await fetch('/speak', { method: 'POST', body: fd });
+    return res.ok ? await res.blob() : null;
+  } catch { return null; }
+}
+
+function _playBlob(blob) {
+  return new Promise(resolve => {
+    const url   = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    state.currentAudio = audio;
+    const cleanup = () => { URL.revokeObjectURL(url); state.currentAudio = null; resolve(); };
+    audio.onended = cleanup;
+    audio.onerror = cleanup;
+    audio.play().catch(cleanup);
+  });
+}
+
+function _playBrowserSentence(text) {
+  return new Promise(resolve => {
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.onend = utt.onerror = resolve;
+    window.speechSynthesis.speak(utt);
+  });
+}
+
+// ── Manual replay (speak button on each message) ───────────────────────────
+async function speakText(text, btn) {
+  if (!state.ttsAvailable) return;
+  stopAudio();
+  if (state.kokoroAvailable) {
+    btn.classList.add('loading');
+    btn.innerHTML = speakBtnHTML('loading');
+    const blob = await _fetchKokoroBlob(text);
+    btn.classList.remove('loading');
+    if (blob) {
+      state.currentBtn = btn;
+      btn.classList.add('playing');
+      btn.innerHTML = speakBtnHTML('playing');
+      await _playBlob(blob);
+      btn.classList.remove('playing');
+      btn.innerHTML = speakBtnHTML('idle');
+      state.currentBtn = null;
+    } else {
+      await _playBrowserFull(text, btn);
+    }
+  } else {
+    await _playBrowserFull(text, btn);
+  }
+}
+
+function _playBrowserFull(text, btn) {
+  return new Promise(resolve => {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    state.currentBtn = btn;
+    btn.classList.add('playing');
+    btn.innerHTML = speakBtnHTML('playing');
+    utt.onend = utt.onerror = () => {
+      btn.classList.remove('playing');
+      btn.innerHTML = speakBtnHTML('idle');
+      state.currentBtn = null;
+      resolve();
     };
+    window.speechSynthesis.speak(utt);
+  });
+}
 
-    // ── DOM refs ──
-    const $messages     = document.getElementById('messages');
-    const $input        = document.getElementById('input');
-    const $sendBtn      = document.getElementById('sendBtn');
-    const $fileInput    = document.getElementById('fileInput');
-    const $uploadDrawer = document.getElementById('uploadDrawer');
-    const $uploadFb     = document.getElementById('uploadFeedback');
-    const $docPill      = document.getElementById('docPill');
-    const $docPillText  = document.getElementById('docPillText');
+function speakBtnHTML(mode) {
+  if (mode === 'loading') return '⏳';
+  if (mode === 'playing') return `<span class="wave"><span></span><span></span><span></span><span></span><span></span></span>`;
+  return '🔊';
+}
 
-    // ── Drawer ──
-    function toggleDrawer() {
-      $uploadDrawer.classList.toggle('open');
+// ── Doc badge ──────────────────────────────────────────────────────────────
+function updateDocBadge() {
+  const n = state.docsLoaded;
+  $docBadgeTxt.textContent = n === 0 ? 'No docs' : `${n} doc${n > 1 ? 's' : ''}`;
+  $docBadge.classList.toggle('has-docs', n > 0);
+}
+
+// ── Upload status strip ────────────────────────────────────────────────────
+let _stripTimer = null;
+function showStrip(msg, type, autohide = true) {
+  $uploadStrip.className = `upload-strip visible ${type}`;
+  $uploadMsg.textContent = msg;
+  clearTimeout(_stripTimer);
+  if (autohide) _stripTimer = setTimeout(() => {
+    $uploadStrip.className = 'upload-strip';
+  }, 4000);
+}
+
+// ── Textarea auto-resize ───────────────────────────────────────────────────
+$input.addEventListener('input', () => {
+  $input.style.height = 'auto';
+  $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
+});
+$input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ── Markdown renderer ──────────────────────────────────────────────────────
+function md(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g,    '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,        '<em>$1</em>')
+    .replace(/`([^`]+)`/g,        '<code>$1</code>')
+    .replace(/^#{3}\s+(.+)$/gm,   '<h3>$1</h3>')
+    .replace(/^#{1,2}\s+(.+)$/gm, '<strong>$1</strong>')
+    .replace(/^\s*[-*]\s+(.+)$/gm,'<li>$1</li>')
+    .replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+}
+
+// ── Append message ─────────────────────────────────────────────────────────
+function appendMsg(html, role, sources = [], rawText = '') {
+  const wrap   = document.createElement('div');
+  wrap.className = `msg ${role}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML  = html;
+
+  if (role === 'ai' && rawText && state.ttsAvailable) {
+    const btn = document.createElement('button');
+    btn.className = 'speak-btn';
+    btn.innerHTML = speakBtnHTML('idle');
+    btn.onclick = () => speakText(rawText, btn);
+    bubble.appendChild(btn);
+  }
+
+  wrap.appendChild(bubble);
+  $messages.appendChild(wrap);
+  scrollBottom();
+  return wrap;
+}
+
+function showThinking() {
+  const row = document.createElement('div');
+  row.id = 'thinking';
+  row.className = 'thinking-row';
+  row.innerHTML = `
+    <div class="thinking-bubble">
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
+      <div class="thinking-text" id="thinkingText"></div>
+    </div>`;
+  $messages.appendChild(row);
+  scrollBottom();
+}
+function hideThinking() { document.getElementById('thinking')?.remove(); }
+let _thinkingChars = 0;
+function updateThinking(chunk) {
+  const el = document.getElementById('thinkingText');
+  if (!el) return;
+  _thinkingChars += chunk.length;
+  el.textContent = `Thinking… ${_thinkingChars.toLocaleString()} chars`;
+  el.classList.add('visible');
+}
+function resetThinking() { _thinkingChars = 0; }
+
+function scrollBottom() {
+  $messages.scrollTop = $messages.scrollHeight;
+}
+
+function setLoading(on) {
+  state.busy = on;
+  $input.disabled = on;
+  $sendBtn.disabled = on;
+  $sendBtn.innerHTML = on
+    ? '<div class="spinner"></div>'
+    : '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+}
+
+// ── Send message ───────────────────────────────────────────────────────────
+async function sendMessage() {
+  const text = $input.value.trim();
+  if (!text || state.busy) return;
+
+  const safe = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  appendMsg(safe, 'user');
+  $input.value = '';
+  $input.style.height = 'auto';
+  setLoading(true);
+  resetThinking();
+  _streamTTSReset();
+  showThinking();
+
+  try {
+    const fd = new FormData();
+    fd.append('message',    text);
+    fd.append('session_id', state.sessionId);
+    const res = await fetch('/chat', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(err.detail || 'Request failed');
     }
 
-    // ── Pill label ──
-    function updatePill() {
-      const n = state.docsLoaded;
-      $docPillText.textContent = n === 0 ? 'No docs' : `${n} doc${n > 1 ? 's' : ''} loaded`;
-      $docPill.classList.toggle('has-docs', n > 0);
-    }
+    // AI bubble — created on first content token so thinking indicator stays visible
+    let aiBubble = null, aiPara = null, fullText = '';
 
-    // ── Auto-resize textarea ──
-    $input.addEventListener('input', () => {
-      $input.style.height = 'auto';
-      $input.style.height = Math.min($input.scrollHeight, 120) + 'px';
-    });
-
-    $input.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    // ── Append message ──
-    function appendMsg(html, role, sources = []) {
+    function ensureBubble() {
+      if (aiBubble) return;
+      hideThinking();
       const wrap = document.createElement('div');
-      wrap.className = `msg ${role}`;
-
-      const avatar = document.createElement('div');
-      avatar.className = 'avatar';
-      avatar.textContent = role === 'ai' ? '⬡' : '↑';
-
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.innerHTML = html;
-
-      if (sources.length > 0) {
-        const src = document.createElement('div');
-        src.className = 'sources';
-        sources.forEach(s => {
-          const tag = document.createElement('span');
-          tag.className = 'source-tag';
-          tag.textContent = s;
-          src.appendChild(tag);
-        });
-        bubble.appendChild(src);
-      }
-
-      wrap.appendChild(avatar);
-      wrap.appendChild(bubble);
+      wrap.className = 'msg ai';
+      aiBubble = document.createElement('div');
+      aiBubble.className = 'bubble';
+      aiPara = document.createElement('p');
+      aiBubble.appendChild(aiPara);
+      wrap.appendChild(aiBubble);
       $messages.appendChild(wrap);
-      scrollBottom();
-      return wrap;
     }
 
-    // ── Thinking indicator ──
-    function showThinking() {
-      const wrap = document.createElement('div');
-      wrap.className = 'thinking';
-      wrap.id = 'thinking';
-      wrap.innerHTML = `
-        <div class="thinking-avatar">⬡</div>
-        <div class="dots"><span></span><span></span><span></span></div>
-      `;
-      $messages.appendChild(wrap);
-      scrollBottom();
-    }
-    function hideThinking() {
-      document.getElementById('thinking')?.remove();
-    }
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let   buffer  = '';
 
-    // ── Simple markdown renderer ──
-    function md(text) {
-      return text
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g,     '<em>$1</em>')
-        .replace(/`([^`]+)`/g,     '<code>$1</code>')
-        .replace(/^#{3}\s+(.+)$/gm,'<h3>$1</h3>')
-        .replace(/^#{1,2}\s+(.+)$/gm,'<strong>$1</strong>')
-        .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
-        .replace(/\n{2,}/g, '</p><p>')
-        .replace(/\n/g, '<br>');
-    }
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
 
-    function scrollBottom() {
-      $messages.scrollTop = $messages.scrollHeight;
-    }
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let evt;
+        try { evt = JSON.parse(line.slice(6)); } catch { continue; }
 
-    function setLoading(on) {
-      state.busy = on;
-      $input.disabled = on;
-      $sendBtn.disabled = on;
-      $sendBtn.innerHTML = on
-        ? '<div class="spinner"></div>'
-        : '<svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
-    }
+        if (evt.type === 'token') {
+          ensureBubble();
+          fullText += evt.content;
+          aiPara.innerHTML = md(fullText);
+          scrollBottom();
+          feedStreamTTS(evt.content);
 
-    // ── Send message ──
-    async function sendMessage() {
-      const text = $input.value.trim();
-      if (!text || state.busy) return;
-
-      appendMsg(text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'), 'user');
-      $input.value = '';
-      $input.style.height = 'auto';
-      setLoading(true);
-      showThinking();
-
-      try {
-        const fd = new FormData();
-        fd.append('message',    text);
-        fd.append('session_id', state.sessionId);
-
-        const res  = await fetch('/chat', { method: 'POST', body: fd });
-        const data = await res.json();
-        hideThinking();
-
-        if (!res.ok) throw new Error(data.detail || 'Request failed');
-        appendMsg(`<p>${md(data.response)}</p>`, 'ai', data.sources || []);
-      } catch (err) {
-        hideThinking();
-        appendMsg(`<p>⚠️ ${err.message}</p>`, 'ai');
-      } finally {
-        setLoading(false);
-        $input.focus();
-      }
-    }
-
-    // ── File upload ──
-    $fileInput.addEventListener('change', async e => {
-      const files = [...e.target.files];
-      if (!files.length) return;
-
-      const valid = ['.docx', '.txt', '.md'];
-      for (const file of files) {
-        const ext = '.' + file.name.split('.').pop().toLowerCase();
-        if (!valid.includes(ext)) {
-          setFeedback(`⚠️ Skipped "${file.name}" — unsupported type`, 'fail');
-          continue;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          setFeedback(`⚠️ Skipped "${file.name}" — exceeds 10 MB`, 'fail');
-          continue;
-        }
-
-        setFeedback(`⏳ Indexing ${file.name}…`, 'busy');
-        setLoading(true);
-
-        const fd = new FormData();
-        fd.append('file', file);
-
-        try {
-          const res  = await fetch('/upload', { method: 'POST', body: fd });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || 'Upload failed');
-
-          state.docsLoaded++;
-          updatePill();
-          setFeedback(`✓ "${file.name}" — ${data.chunks_added} chunks indexed`, 'ok');
-          appendMsg(`<p>📄 <strong>${file.name}</strong> added to the knowledge base (${data.chunks_added} chunks). Ask me anything about it.</p>`, 'ai');
-        } catch (err) {
-          setFeedback(`✕ ${file.name}: ${err.message}`, 'fail');
-        } finally {
-          setLoading(false);
+        } else if (evt.type === 'done') {
+          ensureBubble();
+          flushStreamTTS();
+          if (fullText && state.ttsAvailable) {
+            const btn = document.createElement('button');
+            btn.className = 'speak-btn';
+            btn.innerHTML = speakBtnHTML('idle');
+            btn.onclick = () => speakText(fullText, btn);
+            aiBubble.appendChild(btn);
+          }
+          scrollBottom();
         }
       }
+    }
+  } catch (err) {
+    hideThinking();
+    appendMsg(`<p>⚠ ${err.message}</p>`, 'ai');
+  } finally {
+    setLoading(false);
+    $input.focus();
+  }
+}
 
-      $fileInput.value = '';
-      $input.focus();
-    });
+// ── File upload ────────────────────────────────────────────────────────────
+$fileInput.addEventListener('change', async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const valid = ['.docx', '.txt', '.md'];
 
-    function setFeedback(msg, type) {
-      $uploadFb.textContent = msg;
-      $uploadFb.className   = `upload-feedback ${type}`;
+  for (const file of files) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!valid.includes(ext)) {
+      showStrip(`Skipped "${file.name}" — unsupported type`, 'fail');
+      continue;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showStrip(`Skipped "${file.name}" — over 10 MB`, 'fail');
+      continue;
     }
 
-    // ── Clear chat ──
-    async function clearChat() {
-      if (!confirm('Clear this conversation? Documents stay indexed.')) return;
-      try {
-        const fd = new FormData();
-        fd.append('session_id', state.sessionId);
-        await fetch('/clear', { method: 'POST', body: fd });
-      } catch (_) {}
-      $messages.innerHTML = `
-        <div class="welcome">
-          <strong>Conversation cleared.</strong>
-          Your documents are still indexed — keep asking questions.
-        </div>`;
+    showStrip(`Indexing ${file.name}…`, 'busy', false);
+    setLoading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res  = await fetch('/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Upload failed');
+      state.docsLoaded++;
+      updateDocBadge();
+      showStrip(`"${file.name}" indexed — ${data.chunks_added} chunks`, 'ok');
+      const safeName = file.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      appendMsg(`<p><strong>${safeName}</strong> indexed (${data.chunks_added} chunks). Ask me anything about it.</p>`, 'ai');
+    } catch (err) {
+      showStrip(`${file.name}: ${err.message}`, 'fail');
+    } finally {
+      setLoading(false);
     }
-  </script>
+  }
+  $fileInput.value = '';
+  $input.focus();
+});
+
+// ── Clear chat ─────────────────────────────────────────────────────────────
+async function clearChat() {
+  if (!confirm('Clear conversation? Documents stay indexed.')) return;
+  stopAudio();
+  try {
+    const fd = new FormData();
+    fd.append('session_id', state.sessionId);
+    await fetch('/clear', { method: 'POST', body: fd });
+  } catch (_) {}
+  $messages.innerHTML = '<div class="welcome"><strong>Conversation cleared.</strong> Your documents are still indexed.</div>';
+}
+</script>
 </body>
 </html>
