@@ -1,6 +1,9 @@
 from fastapi import FastAPI, Form, UploadFile, File, HTTPException
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 import json
+import pickle
+from pathlib import Path
+from rank_bm25 import BM25Okapi
 from docx import Document
 import ollama
 import chromadb
@@ -30,8 +33,11 @@ app = FastAPI(title="RAG Assistant", version="4.0")
 LLM_MODEL   = "qwen2.5:3b"
 EMBED_MODEL = "nomic-embed-text"
 COLLECTION  = "documents"
-MAX_CONTEXT_CHARS = 40000   # ~10k tokens — keeps broad queries within num_ctx
-TTS_VOICE   = "af_heart"   # kokoro voice: af_heart, af_bella, am_adam, bm_lewis
+MAX_CONTEXT_CHARS = 40000
+TTS_VOICE   = "af_heart"
+BM25_PATH   = Path("./bm25_index.pkl")
+RRF_K       = 60
+HYBRID_N    = 12
 
 # ─────────────────────────────────────────
 # KOKORO TTS  (lazy-loaded on first /speak)
@@ -96,6 +102,85 @@ collection = chroma_client.get_or_create_collection(
 )
 
 chat_history: dict = {}
+
+
+# ─────────────────────────────────────────
+# BM25 INDEX
+# ─────────────────────────────────────────
+_bm25_index:  BM25Okapi | None = None
+_bm25_corpus: list[str]        = []
+_bm25_ids:    list[str]        = []
+
+def _bm25_tokenize(text: str) -> list[str]:
+    return re.sub(r'[^a-z0-9\s]', ' ', text.lower()).split()
+
+def _bm25_save() -> None:
+    with open(BM25_PATH, "wb") as f:
+        pickle.dump({"corpus": _bm25_corpus, "ids": _bm25_ids}, f)
+
+def _bm25_load() -> None:
+    global _bm25_index, _bm25_corpus, _bm25_ids
+    if not BM25_PATH.exists():
+        return
+    try:
+        with open(BM25_PATH, "rb") as f:
+            data = pickle.load(f)
+        _bm25_corpus = data["corpus"]
+        _bm25_ids    = data["ids"]
+        if _bm25_corpus:
+            _bm25_index = BM25Okapi([_bm25_tokenize(c) for c in _bm25_corpus])
+        print(f"[bm25] Loaded {len(_bm25_corpus)} chunks")
+    except Exception as e:
+        print(f"[bm25] Load failed: {e}")
+
+def _bm25_add(chunks: list[str], ids: list[str]) -> None:
+    global _bm25_index, _bm25_corpus, _bm25_ids
+    _bm25_corpus.extend(chunks)
+    _bm25_ids.extend(ids)
+    _bm25_index = BM25Okapi([_bm25_tokenize(c) for c in _bm25_corpus])
+    _bm25_save()
+
+def _bm25_search(query: str, n: int) -> list[str]:
+    if _bm25_index is None or not _bm25_ids:
+        return []
+    scores  = _bm25_index.get_scores(_bm25_tokenize(query))
+    top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:n]
+    return [_bm25_ids[i] for i in top_idx if scores[i] > 0]
+
+def _bm25_clear() -> None:
+    global _bm25_index, _bm25_corpus, _bm25_ids
+    _bm25_index, _bm25_corpus, _bm25_ids = None, [], []
+    if BM25_PATH.exists():
+        BM25_PATH.unlink()
+
+def _rrf(vector_ids: list[str], bm25_ids: list[str]) -> list[str]:
+    scores: dict[str, float] = {}
+    for rank, doc_id in enumerate(vector_ids, 1):
+        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (RRF_K + rank)
+    for rank, doc_id in enumerate(bm25_ids, 1):
+        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (RRF_K + rank)
+    return sorted(scores, key=lambda x: scores[x], reverse=True)
+
+_bm25_load()
+
+def _bm25_backfill() -> None:
+    """Populate BM25 from ChromaDB if BM25 is empty but ChromaDB has docs."""
+    if _bm25_index is not None or _bm25_corpus:
+        return  # already loaded
+    try:
+        count = collection.count()
+        if count == 0:
+            return
+        result = collection.get(include=["documents", "ids"])
+        ids  = result.get("ids", [])
+        docs = result.get("documents", [])
+        if ids and docs:
+            _bm25_add(docs, ids)
+            print(f"[bm25] Backfilled {len(ids)} chunks from ChromaDB")
+    except Exception as e:
+        print(f"[bm25] Backfill failed: {e}")
+
+_bm25_backfill()
 
 
 # ─────────────────────────────────────────
@@ -165,58 +250,21 @@ def clean_extracted_text(text: str) -> str:
 # ─────────────────────────────────────────
 # CHUNKING
 # ─────────────────────────────────────────
-def _looks_like_name(text: str) -> bool:
-    t = text.strip()
-    if not t: return False
-    words = t.split()
-    if not (1 <= len(words) <= 6): return False
-    if ':' in t or '\u203a' in t or '/' in t: return False
-    if t.isupper(): return False
-    if not t[0].isupper(): return False
-    if not any(w[0].isupper() for w in words if w.isalpha()): return False
-    return True
-
-def _looks_like_job_title(text: str) -> bool:
-    t = text.strip()
-    if not t: return False
-    words = t.split()
-    if not (1 <= len(words) <= 6): return False
-    if ':' in t or '\u203a' in t: return False
-    if not t[0].isupper(): return False
-    role_keywords = {
-        'developer', 'engineer', 'analyst', 'specialist', 'designer',
-        'architect', 'manager', 'consultant', 'lead', 'director',
-        'scientist', 'researcher', 'intern', 'associate', 'full', 'stack',
-        'backend', 'frontend', 'cloud', 'data', 'machine', 'web', 'python',
-        'technical', 'digital', 'mobile', 'devops', 'qa', 'test'
-    }
-    return bool({w.lower().strip('&,') for w in words} & role_keywords)
-
 def _split_by_sections(paragraphs: list[str]) -> list[tuple[str, list[str]]]:
     sections: list[tuple[str, list[str]]] = []
     current_heading, current_body = "", []
-    i = 0
-    while i < len(paragraphs):
-        para = paragraphs[i]
-        next_para = paragraphs[i + 1] if i + 1 < len(paragraphs) else ""
+    for para in paragraphs:
         if para.isupper() and 1 <= len(para.split()) <= 8:
             if current_body or current_heading:
                 sections.append((current_heading, current_body))
             current_heading, current_body = para, []
-            i += 1
-        elif _looks_like_name(para) and _looks_like_job_title(next_para):
-            if current_body or current_heading:
-                sections.append((current_heading, current_body))
-            current_heading, current_body = para + " \u2014 " + next_para, []
-            i += 2
         else:
             current_body.append(para)
-            i += 1
     if current_body or current_heading:
         sections.append((current_heading, current_body))
     return sections
 
-def split_text_smart(text: str, chunk_size: int = 1400, overlap: int = 200) -> list[str]:
+def split_text_smart(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str]:
     if not text: return []
     paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
     sections   = _split_by_sections(paragraphs)
@@ -330,19 +378,26 @@ async def upload_document(file: UploadFile = File(...)):
         chunks = split_text_smart(text)
         if not chunks: raise HTTPException(400, "No chunks created")
         added = 0
+        new_chunks: list[str] = []
+        new_ids:    list[str] = []
         for i, chunk in enumerate(chunks):
             if len(chunk.strip()) < 30: continue
+            cid  = f"{file.filename}-{i}-{hash(chunk) % 100000}"
             emb  = ollama.embeddings(model=EMBED_MODEL, prompt=chunk)['embedding']
             lines = [l.strip() for l in chunk.split('\n') if l.strip()]
             title = lines[0][:80] if lines and len(lines[0]) < 100 else "Content"
             collection.add(
-                ids=[f"{file.filename}-{i}-{hash(chunk) % 100000}"],
+                ids=[cid],
                 embeddings=[emb],
                 documents=[chunk],
                 metadatas=[{"source": file.filename, "section": title,
                              "chunk_idx": i, "char_count": len(chunk)}]
             )
+            new_chunks.append(chunk)
+            new_ids.append(cid)
             added += 1
+        if new_chunks:
+            _bm25_add(new_chunks, new_ids)
         return {"status": "success", "chunks_added": added,
                 "total_chars": len(text), "filename": file.filename}
     except HTTPException: raise
@@ -367,28 +422,52 @@ async def chat(message: str = Form(...), session_id: str = Form(default="default
                 qe      = ollama.embeddings(model=EMBED_MODEL, prompt=message)['embedding']
                 results = collection.query(
                     query_embeddings=[qe],
-                    n_results=min(10, doc_count),
-                    include=['documents', 'metadatas', 'distances']
+                    n_results=min(HYBRID_N, doc_count),
+                    include=['documents', 'metadatas', 'distances', 'ids']
                 )
+                v_ids = results['ids'][0] if results.get('ids') else []
+                b_ids = _bm25_search(message, HYBRID_N)
+                fused = _rrf(v_ids, b_ids)
+
+                # Build lookup from vector results
+                vec_lookup: dict[str, tuple[str, dict, float]] = {}
                 if results['documents'] and results['documents'][0]:
                     docs  = results['documents'][0]
                     metas = results['metadatas'][0] if results['metadatas'] else [{}]*len(docs)
                     dists = results['distances'][0]  if results['distances']  else [1.0]*len(docs)
-                    sc: dict = {}
-                    parts = []
-                    for doc, meta, dist in zip(docs, metas, dists):
-                        if dist > 0.75: continue
-                        src = meta.get('source', 'document')
-                        if sc.get(src, 0) >= 5: continue
-                        sc[src] = sc.get(src, 0) + 1
-                        parts.append(f"[{src} — {meta.get('section','content')}]\n{doc.strip()}")
-                        if src not in sources_used: sources_used.append(src)
-                    context_text = "\n\n---\n\n".join(parts)
+                    for doc_id, doc, meta, dist in zip(v_ids, docs, metas, dists):
+                        vec_lookup[doc_id] = (doc, meta, dist)
+
+                # Fetch any BM25-only hits that aren't in vector results
+                missing = [i for i in fused if i not in vec_lookup]
+                if missing:
+                    got = collection.get(ids=missing, include=['documents', 'metadatas'])
+                    for doc_id, doc, meta in zip(
+                        got.get('ids', []),
+                        got.get('documents', []),
+                        got.get('metadatas', [])
+                    ):
+                        vec_lookup[doc_id] = (doc, meta or {}, 0.5)  # neutral distance
+
+                sc: dict = {}
+                parts = []
+                for doc_id in fused:
+                    if doc_id not in vec_lookup:
+                        continue
+                    doc, meta, dist = vec_lookup[doc_id]
+                    if dist > 0.75 and doc_id not in b_ids:
+                        continue  # skip poor vector matches not rescued by BM25
+                    src = meta.get('source', 'document')
+                    if sc.get(src, 0) >= 5: continue
+                    sc[src] = sc.get(src, 0) + 1
+                    parts.append(f"[{src} — {meta.get('section','content')}]\n{doc.strip()}")
+                    if src not in sources_used: sources_used.append(src)
+                context_text = "\n\n---\n\n".join(parts)
         except Exception as e:
             print(f"[rag] {e}")
 
     system_prompt = (
-        f"""You are a helpful AI assistant. Use the context below when the question is about the uploaded documents. For all other questions, answer from your general knowledge.
+        f"""You are a helpful AI assistant. Answer questions directly and concisely using ONLY the document context provided below. Do NOT add disclaimers, caveats, suggestions to "contact the company", or statements about what you don't have access to. If the answer is in the context, state it plainly. If it is not in the context at all, say "I don't see that information in the uploaded documents."
 
 DOCUMENT CONTEXT:
 {context_text}"""
@@ -493,6 +572,7 @@ async def delete_all_documents():
         chroma_client.delete_collection(COLLECTION)
         collection = chroma_client.get_or_create_collection(
             name=COLLECTION, metadata={"hnsw:space": "cosine"})
+        _bm25_clear()
         return {"status": "ok", "message": "All documents deleted"}
     except Exception as e:
         raise HTTPException(500, str(e))
